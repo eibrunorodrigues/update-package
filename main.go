@@ -140,7 +140,7 @@ func updateRepo(args *Arguments, packagesInfoFilePath string, finalFile string) 
 	out := strings.TrimRight(packagesInfoFilePath, "/" + args.FileName)
 	currentPackage := out[strings.LastIndex(out, "/")+1:]
 
-	for _, branch := range [2]string{"develop", "release"} {
+	for _, branch := range args.Branches {
 
 		fmt.Print("\nDo you want to update the branch: " + branch + " of " + currentPackage + "? ")
 		if utils.Ask() {
