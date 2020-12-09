@@ -2,6 +2,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -21,20 +22,28 @@ type PackageModel struct {
 	NewVersion     string
 }
 
+type Arguments struct {
+	Path     string
+	FileName string
+	Branchs  []string
+	Language string
+}
+
 func initApplication() {
 	fatalErrors := make(chan string)
-	validateArgs()
-	defaultDirectory := os.Args[1:][0]
+	var arguments Arguments
+	registerArgs(&arguments)
+	validateArgs(&arguments)
 
-	if !strings.HasSuffix(defaultDirectory, "/") {
-		defaultDirectory = defaultDirectory + "/"
+	if !strings.HasSuffix(arguments.Path, "/") {
+		arguments.Path += "/"
 	}
 
 	var packages []PackageModel
 
-	getPackagesRequirements(&fatalErrors, defaultDirectory, &packages)
+	getPackagesRequirements(&fatalErrors, arguments.Path, &packages)
 	askForEachPackage(&packages)
-	updateRequirements(defaultDirectory, packages)
+	updateRequirements(arguments.Path, packages)
 
 	for errors := range fatalErrors {
 		log.Fatalln(errors)
@@ -202,8 +211,8 @@ func updateRepo(privateRequirementsPath string, finalFile string) {
 				log.Panic(err.Error())
 			}
 
-			err = w.Pull(&git.PullOptions{RemoteName: "origin", SingleBranch: true, ReferenceName: plumbing.ReferenceName(branch)})
-			if err != nil {
+			err = w.Pull(&git.PullOptions{RemoteName: "origin"})
+			if err != nil && !strings.Contains(err.Error(), "up-to-date") {
 				log.Panic(err.Error())
 			}
 
@@ -284,16 +293,32 @@ func contains(packagesList []PackageModel, argument string) bool {
 	return false
 }
 
-func validateArgs() {
-	arguments := os.Args[1:]
-
-	if len(arguments) == 0 {
+func validateArgs(args *Arguments) {
+	if args.Path == "" {
 		log.Fatalln("You should pass something")
 	}
 
-	if _, err := os.Stat(arguments[0]); os.IsNotExist(err) {
-		log.Fatalln("The argument " + arguments[0] + " is not a valid folder")
+	if _, err := os.Stat(args.Path); os.IsNotExist(err) {
+		log.Fatalln("The argument " + args.Path + " is not a valid folder")
 	}
+
+	for _, branch := range args.Branchs {
+		if branch != "develop" && branch != "release" && branch != "master" {
+			log.Fatalln("Branch " + branch + " not allowed ")
+		}
+	}
+
+}
+
+func registerArgs(args *Arguments) {
+	var branchs string
+	flag.StringVar(&args.FileName, "file", "private-requirements.txt", "Name of the File to change")
+	flag.StringVar(&args.Path, "path", "~/", "Path to the Projects")
+	flag.StringVar(&branchs, "branch", "develop,release", "Branchs to update splitted with commas")
+	flag.StringVar(&args.Language, "lang", "python", "The programming language you would like to update the packages")
+	flag.Parse()
+
+	args.Branchs = strings.Split(branchs, ",")
 }
 
 func main() {
