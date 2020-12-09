@@ -125,9 +125,9 @@ func updateRequirements(args *Arguments, packages []PackageModel) {
 	}
 }
 
-func updateRepo(args *Arguments, privateRequirementsPath string, finalFile string) {
+func updateRepo(args *Arguments, packagesInfoFilePath string, finalFile string) {
 
-	r, err := git.PlainOpen(strings.Replace(privateRequirementsPath, args.FileName, "", -1))
+	r, err := git.PlainOpen(strings.Replace(packagesInfoFilePath, args.FileName, "", -1))
 	if err != nil {
 		log.Panic("Error while opening local git repository " + err.Error())
 	}
@@ -137,7 +137,7 @@ func updateRepo(args *Arguments, privateRequirementsPath string, finalFile strin
 		log.Panic(err.Error())
 	}
 
-	out := strings.TrimRight(privateRequirementsPath, "/" + args.FileName)
+	out := strings.TrimRight(packagesInfoFilePath, "/" + args.FileName)
 	currentPackage := out[strings.LastIndex(out, "/")+1:]
 
 	for _, branch := range [2]string{"develop", "release"} {
@@ -156,7 +156,7 @@ func updateRepo(args *Arguments, privateRequirementsPath string, finalFile strin
 				log.Panic(err.Error())
 			}
 
-			if err := ioutil.WriteFile(privateRequirementsPath, []byte(finalFile), 0755); err != nil {
+			if err := ioutil.WriteFile(packagesInfoFilePath, []byte(finalFile), 0755); err != nil {
 				log.Panic("Error saving file " + err.Error())
 			}
 
