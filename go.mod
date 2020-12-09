@@ -1,4 +1,4 @@
-module github.com/eibrunorodrigues/updatePackages
+module github.com/eibrunorodrigues/update-packages
 
 go 1.15
 
