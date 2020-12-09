@@ -93,7 +93,7 @@ func updateRequirements(directory string, packages []PackageModel) {
 	}
 
 	for versionFile := range findAllFilesToUpdate(directory) {
-		fileData := strings.Split(string(versionFile[0]), "\n")
+		fileData := strings.Split(versionFile[0], "\n")
 		var finalFile string
 
 		for _, data := range fileData {
