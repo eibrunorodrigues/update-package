@@ -251,7 +251,7 @@ func registerArgs(args *Arguments) {
 	var branches string
 	flag.StringVar(&args.FileName, "file", "private-requirements.txt", "Name of the File to change")
 	flag.StringVar(&args.Path, "path", "~/", "Path to the Projects")
-	flag.StringVar(&branches, "branch", "develop,release", "Branches to update splitted with commas")
+	flag.StringVar(&branches, "branch", "develop,release", "Branches to update split with commas")
 	flag.StringVar(&args.Language, "lang", "python", "The programming language you would like to update the packages")
 	flag.Parse()
 
