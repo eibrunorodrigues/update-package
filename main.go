@@ -1,4 +1,4 @@
-// Script for updating private-requirements of python projects
+// Script for updating package versions of projects
 package main
 
 import (
@@ -45,9 +45,9 @@ func initApplication() {
 
 	var packages []PackageModel
 
-	getPackagesRequirements(arguments.Path, &packages)
+	getPackagesRequirements(&arguments, &packages)
 	askForEachPackage(&packages)
-	updateRequirements(arguments.Path, packages)
+	updateRequirements(&arguments, packages)
 }
 
 func askForEachPackage(packages *[]PackageModel) {
@@ -81,7 +81,7 @@ func askForEachPackage(packages *[]PackageModel) {
 	}
 }
 
-func updateRequirements(directory string, packages []PackageModel) {
+func updateRequirements(args *Arguments, packages []PackageModel) {
 	getVersion := func(pkg string, packs []PackageModel) string {
 		for _, item := range packs {
 			if pkg == item.Package {
@@ -92,7 +92,7 @@ func updateRequirements(directory string, packages []PackageModel) {
 		return ""
 	}
 
-	for versionFile := range findAllFilesToUpdate(directory) {
+	for versionFile := range findAllFilesToUpdate(args) {
 		fileData := strings.Split(versionFile[0], "\n")
 		var finalFile string
 
@@ -121,13 +121,13 @@ func updateRequirements(directory string, packages []PackageModel) {
 
 			finalFile += data + PythonPKGVersionSetter + newVersion + "\n"
 		}
-		updateRepo(versionFile[1], finalFile)
+		updateRepo(args, versionFile[1], finalFile)
 	}
 }
 
-func updateRepo(privateRequirementsPath string, finalFile string) {
+func updateRepo(args *Arguments, privateRequirementsPath string, finalFile string) {
 
-	r, err := git.PlainOpen(strings.Replace(privateRequirementsPath, "private-requirements.txt", "", -1))
+	r, err := git.PlainOpen(strings.Replace(privateRequirementsPath, args.FileName, "", -1))
 	if err != nil {
 		log.Panic("Error while opening local git repository " + err.Error())
 	}
@@ -137,7 +137,7 @@ func updateRepo(privateRequirementsPath string, finalFile string) {
 		log.Panic(err.Error())
 	}
 
-	out := strings.TrimRight(privateRequirementsPath, "/private-requirements.txt")
+	out := strings.TrimRight(privateRequirementsPath, "/" + args.FileName)
 	currentPackage := out[strings.LastIndex(out, "/")+1:]
 
 	for _, branch := range [2]string{"develop", "release"} {
@@ -171,9 +171,9 @@ func updateRepo(privateRequirementsPath string, finalFile string) {
 	}
 }
 
-func getPackagesRequirements(directory string, packages *[]PackageModel) {
-	for versionFile := range findAllFilesToUpdate(directory) {
-		fileData := strings.Split(string(versionFile[0]), "\n")
+func getPackagesRequirements(args *Arguments, packages *[]PackageModel) {
+	for versionFile := range findAllFilesToUpdate(args) {
+		fileData := strings.Split(versionFile[0], "\n")
 
 		for _, data := range fileData {
 			if data == "" {
@@ -195,10 +195,10 @@ func getPackagesRequirements(directory string, packages *[]PackageModel) {
 	}
 }
 
-func findAllFilesToUpdate(directory string) <-chan [2]string {
+func findAllFilesToUpdate(args *Arguments) <-chan [2]string {
 	response := make(chan [2]string)
 	go func() {
-		for _, match := range getAllProjects(directory) {
+		for _, match := range getAllProjects(args.FileName, args.Path) {
 			result, err := ioutil.ReadFile(match)
 
 			if err != nil {
@@ -212,8 +212,8 @@ func findAllFilesToUpdate(directory string) <-chan [2]string {
 	return response
 }
 
-func getAllProjects(defaultDirectory string) []string {
-	matches, err := filepath.Glob(defaultDirectory + "**/private-requirements.txt")
+func getAllProjects(fileName string, defaultDirectory string) []string {
+	matches, err := filepath.Glob(defaultDirectory + "**/" + fileName)
 	if err != nil {
 		log.Panic(err)
 	}
