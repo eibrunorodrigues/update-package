@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -46,53 +47,39 @@ func initApplication() {
 	var packages []PackageModel
 
 	getPackagesRequirements(&arguments, &packages)
-	askForEachPackage(&packages)
-	updateRequirements(&arguments, packages)
+	updateRequirements(&arguments, &packages)
 }
 
-func askForEachPackage(packages *[]PackageModel) {
-
-	for index, packageItem := range *packages {
-		var response bool
-
-		if packageItem.CurrentVersion == "" {
-			fmt.Print("\n\nFound package " + packageItem.Package + " without a static version on it. ")
-		} else {
-			fmt.Print("\n\nFound package " + packageItem.Package + " on version: " + packageItem.CurrentVersion)
-		}
-
-		if packageItem.CurrentVersion == "" {
-			fmt.Print("\nWould you like to set a static version on this package? ")
-			response = utils.Ask()
-		} else {
-			fmt.Print("\nWould you like to update it? ")
-			response = utils.Ask()
-		}
-
-		if response {
-			var versionOutput string
-			fmt.Print("Please type the new version of " + packageItem.Package + ": ")
-			_, _ = fmt.Scanln(&versionOutput)
-			(*packages)[index].NewVersion = versionOutput
-			continue
-		}
-
-		(*packages)[index].NewVersion = packageItem.CurrentVersion
+func fillLinePackageVersion(packages *[]PackageModel, currentMicroservice string, linePackageName string, linePackageVersion *string, currentVersion string) {
+	questionHead := "\n[" + currentMicroservice + "." + linePackageName + "]"
+	if currentVersion == "" {
+		fmt.Print(questionHead + " version is static (which means it will get all new versions on release)")
+	} else {
+		fmt.Print(questionHead + " version is " + currentVersion)
 	}
-}
 
-func updateRequirements(args *Arguments, packages []PackageModel) {
-	getVersion := func(pkg string, packs []PackageModel) string {
-		for _, item := range packs {
-			if pkg == item.Package {
-				return item.NewVersion
+	if !utils.Ask(questionHead + "... Would you like to keep it?") {
+		defaultPackageIdx := getPackageIdx(*packages, linePackageName)
+
+		if !utils.Ask(questionHead + " Default version is " + (*packages)[defaultPackageIdx].NewVersion + " would you like to use it here?") {
+			fmt.Print()
+			versionOutput := receiveVersionInput()
+
+			if utils.Ask(questionHead + " Do you want to keep this version as default?") {
+				(*packages)[defaultPackageIdx].NewVersion = versionOutput
 			}
+			*linePackageVersion = versionOutput
 		}
-		log.Panic("Package " + pkg + " not found")
-		return ""
-	}
 
+	} else {
+		*linePackageVersion = currentVersion
+	}
+}
+
+func updateRequirements(args *Arguments, packages *[]PackageModel) {
 	for versionFile := range findAllFilesToUpdate(args) {
+		currentMicroservice := getMicroserviceBasePath(args, versionFile[1])
+
 		fileData := strings.Split(versionFile[0], "\n")
 		var finalFile string
 
@@ -101,31 +88,59 @@ func updateRequirements(args *Arguments, packages []PackageModel) {
 				continue
 			}
 
+			var linePackageName string
+			var linePackageVersion string
+
 			if strings.Contains(data, PythonPKGVersionSetter) {
 				version := strings.Split(data, PythonPKGVersionSetter)
-				newVersion := getVersion(version[0], packages)
+				linePackageName = version[0]
 
-				if newVersion != "" {
-					finalFile += version[0] + PythonPKGVersionSetter + newVersion + "\n"
-					continue
+				fillLinePackageVersion(packages, currentMicroservice, linePackageName, &linePackageVersion, version[1])
+
+				finalFile += linePackageName + PythonPKGVersionSetter + linePackageVersion + "\n"
+			} else {
+				linePackageName = data
+
+				fillLinePackageVersion(packages, currentMicroservice, linePackageName, &linePackageVersion, "")
+
+				if linePackageVersion == "" {
+					finalFile += linePackageName + "\n"
+				} else {
+					finalFile += linePackageName + PythonPKGVersionSetter + linePackageVersion + "\n"
 				}
-				finalFile += version[0] + "\n"
-				continue
 			}
-			newVersion := getVersion(data, packages)
-
-			if newVersion == "" {
-				finalFile += data + "\n"
-				continue
-			}
-
-			finalFile += data + PythonPKGVersionSetter + newVersion + "\n"
 		}
-		updateRepo(args, versionFile[1], finalFile)
+
+		updateRepo(args, versionFile[1], finalFile, currentMicroservice)
 	}
 }
 
-func updateRepo(args *Arguments, packagesInfoFilePath string, finalFile string) {
+func receiveVersionInput() string {
+	getMatch := func(version string) bool {
+		match, _ := regexp.MatchString("^[0-9]\\.[0-9]{1,2}(\\.[0-9]{1,3})?$", version)
+		return match
+	}
+
+	versionOutput := ""
+	counter := 0
+	for !getMatch(versionOutput) {
+		if counter > 0 {
+			fmt.Print("\nWrong format... Please follow the rule: 0.00.00{0} ... ")
+		}
+		counter++
+		_, _ = fmt.Scanln(&versionOutput)
+	}
+
+	return versionOutput
+}
+
+func getMicroserviceBasePath(args *Arguments, microserviceFilePath string) string {
+	out := strings.TrimRight(microserviceFilePath, "/"+args.FileName)
+	currentPackage := out[strings.LastIndex(out, "/")+1:]
+	return currentPackage
+}
+
+func updateRepo(args *Arguments, packagesInfoFilePath string, finalFile string, currentPackage string) {
 
 	r, err := git.PlainOpen(strings.Replace(packagesInfoFilePath, args.FileName, "", -1))
 	if err != nil {
@@ -137,13 +152,9 @@ func updateRepo(args *Arguments, packagesInfoFilePath string, finalFile string) 
 		log.Panic(err.Error())
 	}
 
-	out := strings.TrimRight(packagesInfoFilePath, "/" + args.FileName)
-	currentPackage := out[strings.LastIndex(out, "/")+1:]
-
 	for _, branch := range args.Branches {
 
-		fmt.Print("\nDo you want to update the branch: " + branch + " of " + currentPackage + "? ")
-		if utils.Ask() {
+		if utils.Ask("\nDo you want to update the branch: " + branch + " of " + currentPackage + "? ") {
 			if err = w.Reset(&git.ResetOptions{Mode: git.ResetMode(git.HardReset)}); err != nil {
 				log.Panic(err.Error())
 			}
@@ -228,6 +239,24 @@ func contains(packagesList []PackageModel, argument string) bool {
 		}
 	}
 	return false
+}
+
+func getPackage(packagesList *[]PackageModel, argument string) *PackageModel {
+	for _, value := range *packagesList {
+		if value.Package == argument {
+			return &value
+		}
+	}
+	return &PackageModel{}
+}
+
+func getPackageIdx(packagesList []PackageModel, argument string) int {
+	for index, value := range packagesList {
+		if value.Package == argument {
+			return index
+		}
+	}
+	return -1
 }
 
 func validateArgs(args *Arguments) {
