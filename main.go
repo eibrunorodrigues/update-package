@@ -241,15 +241,6 @@ func contains(packagesList []PackageModel, argument string) bool {
 	return false
 }
 
-func getPackage(packagesList *[]PackageModel, argument string) *PackageModel {
-	for _, value := range *packagesList {
-		if value.Package == argument {
-			return &value
-		}
-	}
-	return &PackageModel{}
-}
-
 func getPackageIdx(packagesList []PackageModel, argument string) int {
 	for index, value := range packagesList {
 		if value.Package == argument {
