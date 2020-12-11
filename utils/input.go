@@ -6,6 +6,7 @@ import (
 )
 
 func Ask(question string) bool {
+	fmt.Print(question)
 	okayResponses := []string{"y", "Y", "yes", "Yes", "YES"}
 	notOkayResponses := []string{"n", "N", "no", "No", "NO"}
 	allAnswers := addToList(okayResponses, notOkayResponses)
